@@ -1,22 +1,47 @@
 import argparse
-import dna2vec
-import transformer
-import validation
+from dna2vec import DNA2Vec
+from transformer import Transformer
+from validation import Validation
+from arithmeticCode import ArithmeticCoding
 from pathlib import Path
 from myLog import Log
-from datetime import datetime
 
 
-class DNAcom():
+class DNACompressor():
     """
-    Main class: take the input and run the pipeline
+    DNA sequence compressor, the pipeline take the DNA sequence in fasta file, and output is the compressed binary file
     """
 
-    def __init__(self):
+    def __init__(self, input, output):
+        """
+        Constructor
+
+        Args:
+            input (Path): path to input directory
+            output (Path): path to output directory
+        """
+        self.input = input
+        self.output = output
+        self.model = None
+        self.model_path = Path("models")
+        Path.mkdir(self.model_path, parents=True, exist_ok=True)
+
         self.pipeline()
+        self.validation()
 
     def pipeline(self):
-        pass
+        """
+        Pipeline of model
+        """
+        embedding = DNA2Vec(self.input, self.model_path)
+        dna_prob = Transformer(embedding, self.model_path)
+        ArithmeticCoding(self.input, dna_prob, self.output).encoding()
+
+    def validation(self):
+        """
+        Decode the encoded sequence, benchmarking 
+        """
+        Validation(self.input, self.model)
 
 
 def arg_parse():
@@ -26,14 +51,10 @@ def arg_parse():
     parser = argparse.ArgumentParser(
         description='DNA compression')
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-if', '--input_file',
-                       type=str,
-                       default=None,
-                       help='path to sequence file')
     group.add_argument('-id', '--input_dir',
                        type=str,
                        default=None,
-                       help='path to sequence directory')
+                       help='path to input directory')
     parser.add_argument('-o', '--output',
                         type=str,
                         default="results",
@@ -53,13 +74,19 @@ def main(args):
     # logging set up
     logging_path = Path(args.log)
     logging = Log(path=logging_path)
+
     logging.info(
-        f"""Compressing {args.input}
+        f"""Compressing {args.input_file}
             Path of log file: {logging_path}
             Output directory {args.output}""")
 
     ###################################################################
-    DNAcom()
+    out_path = Path(args.output)
+    Path.mkdir(out_path, parents=True, exist_ok=True)
+
+    files = list(x for x in Path(args.input).iterdir() if x.is_file())
+    for file in files:
+        DNACompressor(file, out_path)
 
 
 if __name__ == "__main__":
