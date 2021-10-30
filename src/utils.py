@@ -1,13 +1,20 @@
-from pathlib import Path
-import argparse
 
+def build_kmers(sequence, ksize):
+    """
+    Building kmer from the sequence
 
-def valid_path(path):
-    path = Path(path)
-    if path.is_dir():
-        return 1, path
-    elif path.is_file():
-        return 0, path
-    else:
-        raise argparse.ArgumentTypeError(
-            f"{path} is not a valid path")
+    Args:
+        sequence (str): input sequence
+        ksize (int): k-mer
+
+    Returns:
+        list: list of kmer
+    """
+    kmers = []
+    n_kmers = len(sequence) - ksize + 1
+
+    for i in range(n_kmers):
+        kmer = sequence[i:i + ksize]
+        kmers.append(kmer)
+
+    return kmers
