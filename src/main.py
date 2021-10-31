@@ -27,7 +27,7 @@ class DNACompressor():
         Path.mkdir(self.model_path, parents=True, exist_ok=True)
 
         self.pipeline()
-        self.validation()
+        # self.validation()
 
     def pipeline(self):
         """
