@@ -7,6 +7,7 @@ from tqdm import tqdm
 from tensorflow.keras import layers
 import io
 import logging
+from pathlib import Path
 
 BATCH_SIZE = 1024
 BUFFER_SIZE = 10000
@@ -42,12 +43,14 @@ class Word2Vec(tf.keras.Model):
 class DNA2Vec():
     def __init__(self, input_path, model_path):
         self.out_path = model_path.joinpath("dna2vec")
+        Path.mkdir(self.out_path, parents=True, exist_ok=True)
+
         self.data = Fasta(str(input_path))
         self.kmer = 11
-        self.window_size = 2
+        self.window_size = 8
         self.num_ns = 4
-        self.embedding_dim = 128
-        self.num_epochs = 5
+        self.embedding_dim = 512
+        self.num_epochs = 20
         logging.info(
             f"Initializing embedding space with word2vec model, kmer:{self.kmer}, window size:{self.window_size}, negative sample:{self.num_ns}, embedding dimension:{self.embedding_dim}")
 
@@ -69,15 +72,21 @@ class DNA2Vec():
                              from_logits=True),
                          metrics=['accuracy', 'mse'])
 
-        word2vec.fit(self.dataset,
-                     epochs=self.num_epochs)
+        early_stop = tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss', patience=5)
+        word2vec.fit(self.train_data,
+                     epochs=self.num_epochs,
+                     verbose=True,
+                     callbacks=[early_stop],
+                     validation_data=self.val_data)
         weights = word2vec.get_layer('w2v_embedding').get_weights()[0]
 
-        logging.info(f"Writing embedding space to {self.output}")
         out_v = io.open(self.out_path.joinpath(
             'vectors.tsv'), 'w', encoding='utf-8')
         out_m = io.open(self.out_path.joinpath(
             'metadata.tsv'), 'w', encoding='utf-8')
+        logging.info(
+            f"Writing embedding space to {self.out_path}| {out_v.name} {out_m.name}")
 
         for index, word in enumerate(self.vocab):
             if index == 0:
@@ -114,7 +123,7 @@ class DNA2Vec():
         logging.info("Building dataset")
 
         self.sequences = [[self.vocab[word] for word in self.corpus.iloc[sent, :]]
-                          for sent in range(self.corpus.shape[0])][:10]
+                          for sent in range(self.corpus.shape[0])][:100]
 
         targets, contexts, labels = self.generate_training_data()
 
@@ -124,9 +133,18 @@ class DNA2Vec():
 
         dataset = tf.data.Dataset.from_tensor_slices(
             ((targets, contexts), labels))
-        dataset = dataset.shuffle(BUFFER_SIZE).batch(
-            BATCH_SIZE, drop_remainder=True)
-        self.dataset = dataset.cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+        dataset = dataset.shuffle(BUFFER_SIZE)
+
+        val_split = 0.2
+        val_size = int(val_split*labels.shape[0])
+        train_size = labels.shape[0]-val_size
+        val_data = dataset.take(val_size)
+        train_data = dataset.skip(train_size)
+
+        self.train_data = train_data.batch(
+            BATCH_SIZE, drop_remainder=True).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
+        self.val_data = val_data.batch(
+            BATCH_SIZE, drop_remainder=True).cache().prefetch(buffer_size=tf.data.AUTOTUNE)
 
     def generate_training_data(self):
         """
@@ -144,6 +162,7 @@ class DNA2Vec():
         Returns:
             [type]: [description]
         """
+
         logging.info("Generating training data set")
 
         # Elements of each training example are appended to these lists.
