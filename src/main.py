@@ -5,6 +5,7 @@ from validation import Validation
 from arithmeticCode import ArithmeticCoding
 from pathlib import Path
 from myLog import Log
+import transformer as trfrm
 
 
 class DNACompressor():
@@ -33,8 +34,9 @@ class DNACompressor():
         """
         Pipeline of model
         """
-        embedding = DNA2Vec(self.input, self.model_path).build()
-        # dna_prob = Transformer(embedding, self.model_path)
+        # embedding = DNA2Vec(self.input, self.model_path).build()  # returns None
+        embedding_path = Path("models/dna2vec")
+        dna_prob = Transformer(embedding_path, self.model_path)
         # ArithmeticCoding(self.input, dna_prob, self.output).encoding()
 
     def validation(self):
@@ -79,15 +81,21 @@ def main(args):
         f'Compressing "{args.input}" directory, Path of log file: "{logging_path}",  Output directory "{args.output}"')
 
     ###################################################################
-    out_path = Path(args.output)
-    Path.mkdir(out_path, parents=True, exist_ok=True)
+    # out_path = Path(args.output)
+    # Path.mkdir(out_path, parents=True, exist_ok=True)
 
-    fasta_extension = [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"]
-    files = [x for x in Path(args.input).iterdir()
-             if x.is_file() and x.suffix in fasta_extension]
-    for file in files:
-        logging.info(f"Compressing file {file}")
-        DNACompressor(file, out_path)
+    # fasta_extension = [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"]
+    # files = [x for x in Path(args.input).iterdir()
+    #          if x.is_file() and x.suffix in fasta_extension]
+    # for file in files:
+    #     logging.info(f"Compressing file {file}")
+    #     DNACompressor(file, out_path)
+
+    
+
+
+
+    
 
 
 if __name__ == "__main__":

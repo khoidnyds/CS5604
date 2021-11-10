@@ -1,33 +1,52 @@
+# Much of the implementation came from the Tensorflow Transformer tutorial:
+# https://www.tensorflow.org/text/tutorials/transformer
+
 # ########################################################################
 # # Setup
 # ########################################################################
-# import collections
-# import logging
-# import os
-# import pathlib
-# import re
-# import string
-# import sys
-# import time
+import collections
+import logging
+import os
+import pathlib
+import re
+import string
+import sys
+import time
 
-# import numpy as np
-# import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # import tensorflow_datasets as tfds
 # import tensorflow_text as text
-# import tensorflow as tf
+import tensorflow as tf
+
+from pyfaidx import Fasta
+from utils import build_kmers
 
 
-# class Transformer():
-#     def __init__():
+# class Transformer(tf.keras.Model):
+#     def __init__(embedding_path):
 #         pass
 
 
-# logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
+logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
 # ########################################################################
-# # Download the Dataset
+# # Dataset
 # ########################################################################
+
+embedding_label_filepath = "models/dna2vec/metadata_raw.tsv"
+embedding_vector_filepath = "models/dna2vec/vectors_raw.tsv"
+
+embedding_vectors_df = pd.read_csv(embedding_vector_filepath, sep='\t', header=None)
+embedding_labels_df = pd.read_csv(embedding_label_filepath, names=["label"])
+embedding_index = pd.concat([embedding_labels_df, embedding_vectors_df], axis=1)
+print(embedding_index)
+
+
+
+
 
 # examples, metadata = tfds.load('ted_hrlr_translate/pt_to_en', with_info=True,
 #                                as_supervised=True)
@@ -43,18 +62,37 @@
 # # Text tokenization & detokenization
 # ########################################################################
 
+# Take in a genome file (A,C,G,T)s
+# Create numerical representation of each 11 length k-mer in the sequence
+
 # tokenizers = tf.saved_model.load(model_name)
 
+def tokenize_kmer(kmer):
+    return embedding_index.loc[embedding_index['label'] == kmer].iloc[:, 1:].values
 
-# def tokenize_pairs(pt, en):
-#     pt = tokenizers.pt.tokenize(pt)
-#     # Convert from ragged to dense, padding with zeros.
-#     pt = pt.to_tensor()
+# Tokenizes the target kmer and input kmer
+def tokenize_pairs(t_kmer, i_kmer):
 
-#     en = tokenizers.en.tokenize(en)
-#     # Convert from ragged to dense, padding with zeros.
-#     en = en.to_tensor()
-#     return pt, en
+    i_kmer = tf.convert_to_tensor(tokenize_kmer(i_kmer))
+    t_kmer = tf.convert_to_tensor(tokenize_kmer(t_kmer))
+
+    return t_kmer, i_kmer
+
+
+# Input data should be a kmer, output should be the subsequent kmer
+def dataset_from_fasta(fasta_filepath):
+    gene_seqs = Fasta(fasta_filepath, as_raw=True)
+    for seq_label in gene_seqs.keys():
+        seq = gene_seqs[seq_label][:]
+        kmers = build_kmers(seq, 11)
+        dataset = tf.data.Dataset.from_tensor_slices((kmers[:-1], kmers[1:]))
+        for a, b in dataset.batch(3).take(1):
+            for df in a.numpy():
+                print(df.decode('utf-8'))
+
+
+
+dataset_from_fasta("data/sample.fasta")
 
 
 # def make_batches(ds):
@@ -72,25 +110,25 @@
 # ########################################################################
 
 
-# def get_angles(pos, i, d_model):
-#     angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
-#     return pos * angle_rates
+def get_angles(pos, i, d_model):
+    angle_rates = 1 / np.power(10000, (2 * (i//2)) / np.float32(d_model))
+    return pos * angle_rates
 
 
-# def positional_encoding(position, d_model):
-#     angle_rads = get_angles(np.arange(position)[:, np.newaxis],
-#                             np.arange(d_model)[np.newaxis, :],
-#                             d_model)
+def positional_encoding(position, d_model):
+    angle_rads = get_angles(np.arange(position)[:, np.newaxis],
+                            np.arange(d_model)[np.newaxis, :],
+                            d_model)
 
-#     # apply sin to even indices in the array; 2i
-#     angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
+    # apply sin to even indices in the array; 2i
+    angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
 
-#     # apply cos to odd indices in the array; 2i+1
-#     angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
+    # apply cos to odd indices in the array; 2i+1
+    angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
 
-#     pos_encoding = angle_rads[np.newaxis, ...]
+    pos_encoding = angle_rads[np.newaxis, ...]
 
-#     return tf.cast(pos_encoding, dtype=tf.float32)
+    return tf.cast(pos_encoding, dtype=tf.float32)
 
 
 # # n, d = 2048, 512
