@@ -17,6 +17,8 @@ class ArithmeticCoding():
         self.length = len(self.words)
         self.dont_know_how_to_encode = input[:kmer_size-1]
         self.out = Path(out)
+        self.encoded = None
+        self.decoded = None
 
     def get_range(self, min_val, max_val, prob):
         scale_factor = 1/(max_val-min_val)
@@ -39,7 +41,19 @@ class ArithmeticCoding():
             nuc = self.nuc_map[word[-1]]
             prob = self.get_range(min_range, max_range, self.prob_table[word])
             min_range, max_range = prob[nuc]
+            if max_range < 0.5:
+                min_range = min_range*2
+                max_range = max_range*2
+            elif min_range > 0.5:
+                min_range = 2*(min_range-Decimal(0.5))
+                max_range = 2*(max_range-Decimal(0.5))
+            elif max_range-min_range < 0.5 and max_range > 0.5 and min_range < 0.5:
+                min_range = 2*(min_range-Decimal(0.25))
+                max_range = 2*(max_range-Decimal(0.25))
+            print(min_range, max_range)
         self.encoded = (min_range+max_range)/2
+        # write to binary file
+        pickle.dump(self.encoded, open(self.out, "wb"))
         return self.encoded
 
     def decoding(self):
@@ -56,9 +70,6 @@ class ArithmeticCoding():
         self.decoded = self.dont_know_how_to_encode + "".join(decoded)
         return self.decoded
 
-    def write_to_file(self):
-        pickle.dump(self.encoded, open(self.out, "wb"))
-
     # def read_from_file(self):
     #     with open(self.out, "rb") as file:
     #         file.read(bytearray(self.decoded))
@@ -70,10 +81,10 @@ def random_out(input):
     return nums/sum(nums)
 
 
-seq = "CGTAGCTGACGTCGATGCTATCGATCGTAC"
+seq = "CGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTAC"
 a = ArithmeticCoding(
     seq, 13, random_out, "results/example.bin")
 a.encoding()
+print(a.encoded)
 a.decoding()
-a.write_to_file()
 assert seq == a.decoded
