@@ -18,3 +18,13 @@ def build_kmers(sequence, ksize):
         kmers.append(kmer)
 
     return kmers
+
+
+def read_fasta_to_dict(fasta_file):
+    gene_dict = {}
+    with open(fasta_file, "r") as f:
+        all_fastas = f.read().split("\n\n")
+        for fasta in all_fastas:
+            lines = fasta.split("\n")
+            gene_dict[lines[0]] = ''.join(lines[1:])
+    return gene_dict
