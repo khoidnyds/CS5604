@@ -30,17 +30,7 @@ class ArithmeticCoding():
         return out_range
 
     def check_range(self, prob, val):
-        for idx, (min_val, max_val) in prob.items():
-            if val > min_val and val < max_val:
-                return idx
-
-    def encoding(self):
-        min_range = Decimal(0)
-        max_range = Decimal(1)
-        for word in self.words:
-            nuc = self.nuc_map[word[-1]]
-            prob = self.get_range(min_range, max_range, self.prob_table[word])
-            min_range, max_range = prob[nuc]
+        for idx, (min_range, max_range) in prob.items():
             if max_range < 0.5:
                 min_range = min_range*2
                 max_range = max_range*2
@@ -50,7 +40,28 @@ class ArithmeticCoding():
             elif max_range-min_range < 0.5 and max_range > 0.5 and min_range < 0.5:
                 min_range = 2*(min_range-Decimal(0.25))
                 max_range = 2*(max_range-Decimal(0.25))
-            print(min_range, max_range)
+            if val > min_range and val < max_range:
+                return idx
+
+    def encoding(self):
+        min_range = Decimal(0)
+        max_range = Decimal(1)
+        for word in self.words:
+            if max_range-min_range < 0.5:
+                if max_range < 0.5:
+                    min_range = min_range*2
+                    max_range = max_range*2
+                elif min_range > 0.5:
+                    min_range = 2*(min_range-Decimal(0.5))
+                    max_range = 2*(max_range-Decimal(0.5))
+                elif max_range > 0.5 and min_range < 0.5:
+                    min_range = 2*(min_range-Decimal(0.25))
+                    max_range = 2*(max_range-Decimal(0.25))
+
+            nuc = self.nuc_map[word[0]]
+            prob = self.get_range(min_range, max_range, self.prob_table[word])
+            min_range, max_range = prob[nuc]
+
         self.encoded = (min_range+max_range)/2
         # write to binary file
         pickle.dump(self.encoded, open(self.out, "wb"))
@@ -81,10 +92,11 @@ def random_out(input):
     return nums/sum(nums)
 
 
-seq = "CGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTACCGTAGCTGACGTCGATGCTATATGGTCGGTCACGATCGTAC"
+seq = "TGGTCGGTCACGATCGTACCTCGGTCACGATCGTAC"
 a = ArithmeticCoding(
     seq, 13, random_out, "results/example.bin")
 a.encoding()
 print(a.encoded)
 a.decoding()
-assert seq == a.decoded
+print(seq)
+print(a.decoded)
