@@ -5,34 +5,39 @@ from pyfaidx import Fasta
 from tqdm import tqdm
 
 
-class Kmer():
-    def __init__(self, query, mer, elements, out="temp") -> None:
+class KmerFreq():
+    def __init__(self, query, mer, elements, out="results/kmerFreq") -> None:
         self.query = query
         self.mer = mer
         self.elements = elements
-        out = Path(out)
-        Path.mkdir(out, parents=True, exist_ok=True)
-        self.out = str(out.joinpath("kmer_count.jf"))
+        self.out = Path(out)
+        Path.mkdir(self.out, parents=True, exist_ok=True)
 
     def get_kmer_count_presentation(self):
-        df = None
+        kmer_freq = None
         data = Fasta(self.query)
+
+        temp_path = str(self.out.joinpath("temp.fna"))
+        temp_dump_jf_path = str(self.out.joinpath("dump_temp.jf"))
+        temp_dump_fna_path = str(self.out.joinpath("dump_temp.fna"))
         for genome in tqdm(data, total=len(data.keys())):
-            with open('temp/temp.fna', 'w') as f:
+            with open(temp_path, 'w') as f:
                 f.write('>' + genome.long_name + "\n")
                 f.write(str(genome))
             subprocess.run(
-                f"jellyfish count -m {self.mer} -s {self.elements} -t 10 temp/temp.fna -o temp/dump_temp.jf", shell=True)
+                f"jellyfish count -m {self.mer} -s {self.elements} -t 10 {temp_path} -o {temp_dump_jf_path}", shell=True)
             subprocess.run(
-                f"jellyfish dump temp/dump_temp.jf -c > temp/dump_temp.fna", shell=True)
-            a = pd.read_csv("temp/dump_temp.fna", sep=" ",
-                            names=['Kmer', genome.name], index_col='Kmer')
-            if df is None:
-                df = a
+                f"jellyfish dump {temp_dump_jf_path} -c > {temp_dump_fna_path}", shell=True)
+            kmer_count = pd.read_csv(temp_dump_fna_path, sep=" ",
+                                     names=['Kmer', genome.name], index_col='Kmer')
+            if kmer_freq is None:
+                kmer_freq = kmer_count
             else:
-                df = df.join(a, how='outer')
-            df.to_csv("temp/kmer_count.csv")
+                kmer_freq = kmer_freq.join(kmer_count, how='outer')
+        kmer_freq = kmer_freq.fillna(0)
+        kmer_freq = (kmer_freq - kmer_freq.mean())/kmer_freq.std()
+        kmer_freq.to_csv(str(self.out.joinpath("kmer_freq.csv")))
 
 
-a = Kmer("raw_data/full_viral_complete_genome.fna", 5, "1000")
+a = KmerFreq("raw_data/full_viral_complete_genome.fna", 5, "1000")
 a.get_kmer_count_presentation()
