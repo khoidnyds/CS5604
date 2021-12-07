@@ -28,3 +28,13 @@ def read_fasta_to_dict(fasta_file):
             lines = fasta.split("\n")
             gene_dict[lines[0]] = ''.join(lines[1:])
     return gene_dict
+
+def build_kmer_token_list(fasta_file, ksize):
+    kmer_list = []
+    gene_dict = read_fasta_to_dict(fasta_file)
+    for label in gene_dict.keys():
+        seq_kmers = build_kmers(gene_dict[label], ksize)
+        kmer_list.extend(seq_kmers)
+    kmer_list = list(set(kmer_list))
+    
+    return kmer_list

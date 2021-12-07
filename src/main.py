@@ -5,7 +5,8 @@ from validation import Validation
 from arithmeticCode import ArithmeticCoding
 from pathlib import Path
 from myLog import Log
-import transformer as trfrm
+import transformer_kmer as trfrm
+from kmerPredictor import KmerPredictor
 
 
 class DNACompressor():
@@ -35,8 +36,8 @@ class DNACompressor():
         Pipeline of model
         """
         # embedding = DNA2Vec(self.input, self.model_path).build()  # returns None
-        embedding_path = Path("models/dna2vec")
-        dna_prob = Transformer(embedding_path, self.model_path)
+        # embedding_path = Path("models/dna2vec")
+        # dna_prob = Transformer(embedding_path, self.model_path)
         # ArithmeticCoding(self.input, dna_prob, self.output).encoding()
 
     def validation(self):

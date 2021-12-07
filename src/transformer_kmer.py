@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from pyfaidx import Fasta
-from utils import build_kmers, read_fasta_to_dict
+from utils import build_kmers, read_fasta_to_dict, build_kmer_token_list
 
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
@@ -29,17 +29,47 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # # Dataset
 # ########################################################################
 
-embedding_label_filepath = "models/dna2vec/metadata_raw.tsv"
-embedding_vector_filepath = "models/dna2vec/vectors_raw.tsv"
+# Sequence Settings
+GENOME_CUTOFF_SIZE = 16700 # 16700
+ksize = 5
+start_token = "<S>"
+end_token = "<E>"
+# Hyperparameters
+num_layers = 4 # 6
+d_model = 100 # 128
+dff = 256 # 512
+num_heads = 4 # 8
+dropout_rate = 0.1
 
-embedding_vectors_df = pd.read_csv(embedding_vector_filepath, sep='\t', header=None)
-embedding_labels_df = pd.read_csv(embedding_label_filepath, names=["label"])
-# Adding embedding vector of zeros for empty input
-embedding_vectors_df = embedding_vectors_df.append(pd.Series(0, index=embedding_vectors_df.columns), ignore_index=True)
-embedding_labels_df = embedding_labels_df.append(pd.Series("", index=embedding_labels_df.columns), ignore_index=True)
+# Create kmer tokenizer table
+kmer_tokens = build_kmer_token_list("data/dataset_1000.fasta", ksize)
+kmer_tokens = sorted(kmer_tokens)
+kmer_tokens.insert(0, start_token)
+kmer_tokens.append(end_token)
+print(kmer_tokens)
+kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 1 for kmer in kmer_tokens }
+# kmer_token_dict[start_token] = 1    # Set index of 1 for start token
+# kmer_token_dict[end_token] = 
+# sorted_kmer_list = sorted(list(kmer_token_dict.items()), key=lambda x: (x[1], x[0]))
+# print(sorted_kmer_list)
+kmer_lookup = tf.lookup.StaticVocabularyTable(
+    tf.lookup.KeyValueTensorInitializer(
+        list(kmer_token_dict.keys()),
+        list(kmer_token_dict.values()),
+        value_dtype=tf.int64
+    ),
+    num_oov_buckets=1
+)
+reverse_kmer_lookup = tf.lookup.StaticHashTable(
+    tf.lookup.KeyValueTensorInitializer(
+        list(kmer_token_dict.values()),
+        list(kmer_token_dict.keys()),
+        key_dtype=tf.int64,
+        value_dtype=tf.string,
+    ),
+    default_value="UNDEFINED ID"
+)
 
-embedding_index = pd.concat([embedding_labels_df, embedding_vectors_df], axis=1)
-print(embedding_index)
 
 # ########################################################################
 # # Text tokenization & detokenization
@@ -47,24 +77,16 @@ print(embedding_index)
 
 # Take in a genome file (A,C,G,T)s
 # Create numerical representation of each 11 length k-mer in the sequence
+def tokenize_sequence(seq_tensor):
+    return kmer_lookup.lookup(seq_tensor)
 
+def detokenize_sequence(tok_seq_tensor):
+    return reverse_kmer_lookup.lookup(tok_seq_tensor)
 
-def tokenize_kmer(kmer):
-    """Return the embedding value of kmer as found by DNA2Vec model"""
-    return (embedding_index.loc[embedding_index['label'] == kmer].iloc[:, 1:].values).flatten()
-
-# print(tokenize_kmer("ACCACTCACGG"))
-# print(tokenize_kmer("ACCACTCACGG").shape)
-# print("helloeoeooe")
-# print(tf.convert_to_tensor(tokenize_kmer("ACCACTCACGG")))
-
-# Tokenizes the target kmer and input kmer
-def tokenize_pairs(t_kmers, i_kmers):
-    """Returns pairs of tokenized kmers"""
-    i_kmers_tensor = tf.convert_to_tensor(i_kmers)
-    t_kmers_tensor = tf.convert_to_tensor(t_kmers)
-
-    return t_kmers_tensor, i_kmers_tensor
+def tokenize_pairs(inputseq, targetseq):
+    i_tokens = tokenize_sequence(inputseq)
+    t_tokens = tokenize_sequence(targetseq)
+    return i_tokens, t_tokens
 
 
 # Input data should be a kmer, target is the subsequent kmer
@@ -93,18 +115,20 @@ def dataset_from_fasta(fasta_filepath, train=0.7, val=0.2, test=0.1):
         i_kmers = []
         t_kmers = []
         for seq_label in seq_labels:
-            seq = gene_seqs[seq_label][:]
-            kmers = build_kmers(seq, 11)
-            i_kmers.append(kmers[:-1])
-            t_kmers.append(kmers[1:])
+            seq = gene_seqs[seq_label][:GENOME_CUTOFF_SIZE]
+            kmers = build_kmers(seq, ksize)
+            i_kmers.append([start_token])
+            kmers.insert(0, start_token)
+            kmers.append(end_token)
+            t_kmers.append(kmers)
         print(len(i_kmers))
         print(len(t_kmers))
-        i_ragged = tf.ragged.constant(i_kmers) # .to_tensor(default_value='', shape=[None, 17000])
-        t_ragged = tf.ragged.constant(t_kmers) # .to_tensor(default_value='', shape=[None, 17000])
-        i_ragged = tf.ragged.map_flat_values(tokenize_kmer, i_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
-        t_ragged = tf.ragged.map_flat_values(tokenize_kmer, t_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
-        print(i_ragged)
-        print(t_ragged)
+        i_ragged = tf.constant(i_kmers) # .to_tensor(default_value='', shape=[None, 17000])
+        t_ragged = tf.ragged.constant(t_kmers).to_tensor() # .to_tensor(default_value='', shape=[None, 17000])
+        # i_ragged = tf.ragged.map_flat_values(tokenize_kmer, i_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
+        # t_ragged = tf.ragged.map_flat_values(tokenize_kmer, t_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
+        # print(i_ragged)
+        # print(t_ragged)
         return tf.data.Dataset.from_tensor_slices((i_ragged, t_ragged))
     
     trainset = create_dataset_subset(train_labels)
@@ -121,13 +145,13 @@ def make_batches(ds):
         .cache()
         .shuffle(BUFFER_SIZE)
         .batch(BATCH_SIZE)
-        .prefetch(tf.data.AUTOTUNE))
-        # .map(tokenize_pairs, num_parallel_calls=tf.data.AUTOTUNE)
+        .prefetch(tf.data.AUTOTUNE)
+        .map(tokenize_pairs, num_parallel_calls=tf.data.AUTOTUNE))
         
 
 
 BUFFER_SIZE = 20000
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 
 def create_data_batches():
     logging.info("Beginning data batch creation")
@@ -140,64 +164,41 @@ def create_data_batches():
     print("Made validation batches: ", val_batches)
     test_batches = make_batches(testset)
     print("Made testing batches: ", test_batches)
-    tf.data.experimental.save(train_batches, "data/train/training_batches")
-    tf.data.experimental.save(val_batches, "data/train/validation_batches")
-    tf.data.experimental.save(test_batches, "data/train/test_batches")
+    tf.data.experimental.save(train_batches, "data/full/training_batches")
+    tf.data.experimental.save(val_batches, "data/full/validation_batches")
+    tf.data.experimental.save(test_batches, "data/full/test_batches")
     logging.info("Done saving data batches to disk.")
 
-def load_data_batches():
-    logging.info("Loading data batches from disk")
-    train_batches = tf.data.experimental.load("data/train/training_batches")
-    val_batches = tf.data.experimental.load("data/train/validation_batches")
-    test_batches = tf.data.experimental.load("data/train/test_batches")
     return train_batches, val_batches, test_batches
 
 
-# print(tokenize_kmer(""))
-# print(tokenize_kmer("ACCACTCACGG"))
+def load_data_batches():
+    logging.info("Loading data batches from disk")
+    train_batches = tf.data.experimental.load("data/full/training_batches")
+    val_batches = tf.data.experimental.load("data/full/validation_batches")
+    test_batches = tf.data.experimental.load("data/full/test_batches")
+    return train_batches, val_batches, test_batches
 
-print("Creating dataset from 1000 FASTA file")
-trainset, valset, testset = dataset_from_fasta("data/dataset_1000.fasta")
-print("\nDone creating dataset from 1000 FASTA file")
-# asdf = testset.batch(3).take(1)
-# asdf_tok = asdf.map(tokenize_pairs, num_parallel_calls=tf.data.AUTOTUNE)
-# for a, b in asdf_tok:
-#     print(a)
-#     print(b)
-#     print("hello1")
-#     for df in a.numpy():
-#         print(df.decode('utf-8'))
 
-#     for af in b.numpy():
-#         print(af.decode('utf-8'))
-#     print("goodbye1")
+# print("Creating dataset from 1000 FASTA file")
+# trainset, valset, testset = dataset_from_fasta("data/dataset_1000.fasta")
+# print("\nDone creating dataset from 1000 FASTA file")
+# train_batches = make_batches(trainset)
+# for inp, tar in train_batches.take(1):
+#     tf.print(inp, summarize=10)
+#     tf.print(tar, summarize=10)
 
-# fdsa = make_batches(testset)
-# for a, b in fdsa.take(1):
-#     print(a)
-#     print(b)
-#     print("hello1")
-#     for df in a.numpy():
-#         print(df.decode('utf-8'))
 
-#     for af in b.numpy():
-#         print(af.decode('utf-8'))
-#     print("goodbye1")
+# create_data_batches()
 
-# # create_data_batches()
 
-# train_batches, val_batches, test_batches = load_data_batches()
-# for a, b in train_batches.take(1):
-#     print(a)
-#     print(b)
-#     print("hello")
-#     for df in a.numpy():
-#         print(df.decode('utf-8'))
-
-#     for af in b.numpy():
-#         print(af.decode('utf-8'))
-#     print("goodbye")
-
+train_batches, val_batches, test_batches = load_data_batches()
+for inp, tar in train_batches.take(1):
+    tf.print(inp, summarize=10)
+    tf.print(tar, summarize=10)
+    print(detokenize_sequence(tar[0]))
+    print(detokenize_sequence(tf.cast(tf.constant(2564), dtype=tf.int64)))
+    print(tokenize_sequence(tf.constant(end_token)))
 
 
 # ########################################################################
@@ -569,9 +570,6 @@ class Transformer(tf.keras.Model):
         return enc_padding_mask, look_ahead_mask, dec_padding_mask
 
 
-
-
-
 # ########################################################################
 # # Optimizer
 # ########################################################################
@@ -627,28 +625,28 @@ def accuracy_function(real, pred):
 # ########################################################################
 # # Training and checkpointing
 # ########################################################################
-# transformer = Transformer(
-#     num_layers=num_layers,
-#     d_model=d_model,
-#     num_heads=num_heads,
-#     dff=dff,
-#     input_vocab_size=tokenizers.pt.get_vocab_size().numpy(),
-#     target_vocab_size=tokenizers.en.get_vocab_size().numpy(),
-#     pe_input=1000,
-#     pe_target=1000,
-#     rate=dropout_rate)
+transformer = Transformer(
+    num_layers=num_layers,
+    d_model=d_model,
+    num_heads=num_heads,
+    dff=dff,
+    input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+    target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+    pe_input=GENOME_CUTOFF_SIZE,
+    pe_target=GENOME_CUTOFF_SIZE,
+    rate=dropout_rate)
 
-# checkpoint_path = "../checkpoints/train"
+checkpoint_path = "./checkpoints/full"
 
-# ckpt = tf.train.Checkpoint(transformer=transformer,
-#                            optimizer=optimizer)
+ckpt = tf.train.Checkpoint(transformer=transformer,
+                           optimizer=optimizer)
 
-# ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=5)
+ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
 
-# # if a checkpoint exists, restore the latest checkpoint.
-# if ckpt_manager.latest_checkpoint:
-#     ckpt.restore(ckpt_manager.latest_checkpoint)
-#     print('Latest checkpoint restored!!')
+# if a checkpoint exists, restore the latest checkpoint.
+if ckpt_manager.latest_checkpoint:
+    ckpt.restore(ckpt_manager.latest_checkpoint)
+    print('Latest checkpoint restored!!')
 
 
 # # The @tf.function trace-compiles train_step into a TF graph for faster
@@ -657,32 +655,34 @@ def accuracy_function(real, pred):
 # # batch sizes (the last batch is smaller), use input_signature to specify
 # # more generic shapes.
 
-# train_step_signature = [
-#     tf.TensorSpec(shape=(None, None), dtype=tf.int64),
-#     tf.TensorSpec(shape=(None, None), dtype=tf.int64),
-# ]
+train_loss = tf.keras.metrics.Mean(name='train_loss')
+train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
+
+train_step_signature = [
+    tf.TensorSpec(shape=(None, None), dtype=tf.int64),
+    tf.TensorSpec(shape=(None, None), dtype=tf.int64),
+]
 
 
-# @tf.function(input_signature=train_step_signature)
-# def train_step(inp, tar):
-#     tar_inp = tar[:, :-1]
-#     tar_real = tar[:, 1:]
+@tf.function(input_signature=train_step_signature)
+def train_step(inp, tar):
+    tar_inp = tar[:, :-1]
+    tar_real = tar[:, 1:]
+    tf.print("Running train step")
+    with tf.GradientTape() as tape:
+        predictions, _ = transformer([inp, tar_inp],
+                                     is_training=True)
+        loss = loss_function(tar_real, predictions)
 
-#     with tf.GradientTape() as tape:
-#         predictions, _ = transformer([inp, tar_inp],
-#                                      is_training=True)
-#         loss = loss_function(tar_real, predictions)
+    gradients = tape.gradient(loss, transformer.trainable_variables)
+    optimizer.apply_gradients(zip(gradients, transformer.trainable_variables))
 
-#     gradients = tape.gradient(loss, transformer.trainable_variables)
-#     optimizer.apply_gradients(zip(gradients, transformer.trainable_variables))
-
-#     train_loss(loss)
-#     train_accuracy(accuracy_function(tar_real, predictions))
+    train_loss(loss)
+    train_accuracy(accuracy_function(tar_real, predictions))
 
 
 # BUFFER_SIZE = 20000
 # BATCH_SIZE = 64
-# EPOCHS = 20
 
 # train_examples, val_examples = examples['train'], examples['validation']
 # train_batches = make_batches(train_examples)
@@ -690,6 +690,8 @@ def accuracy_function(real, pred):
 # train_loss = tf.keras.metrics.Mean(name='train_loss')
 # train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
 
+# tf.print("HERE")
+# EPOCHS = 5
 # for epoch in range(EPOCHS):
 #     start = time.time()
 
@@ -701,14 +703,57 @@ def accuracy_function(real, pred):
 #         train_step(inp, tar)
 
 #         if batch % 50 == 0:
-#             print(
+#             tf.print(
 #                 f'Epoch {epoch + 1} Batch {batch} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
 
-#     if (epoch + 1) % 5 == 0:
+#     if (epoch + 1) % 1 == 0:
 #         ckpt_save_path = ckpt_manager.save()
-#         print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
+#         tf.print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
 
-#     print(
+#     tf.print(
 #         f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
 
-#     print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs\n')
+#     tf.print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs\n')
+
+
+
+
+# output_array = tf.TensorArray(dtype=tf.int64, size=0, dynamic_size=True)
+# output_array = output_array.write(0, tokenize_sequence(tf.constant([start_token])))
+# encoder_input = tokenize_sequence(tf.constant([start_token]))[tf.newaxis]
+# seq_len = tf.size(encoder_input)
+# for i in tf.range(10):
+#     # print(seq_len)
+#     # print(GENOME_CUTOFF_LEN - seq_len.numpy())
+#     output = tf.transpose(output_array.stack())
+#     # paddings = tf.constant([[0,0], [0, GENOME_CUTOFF_SIZE - tf.size(encoder_input).numpy()]])
+#     # padded_input = tf.pad(encoder_input, paddings, mode='CONSTANT')
+#     print("encoder input: ", encoder_input)
+#     # print("padded input: ", padded_input)
+#     # predictions, _ = transformer([encoder_input, output], is_training=False)
+#     predictions, _ = transformer([encoder_input, output], is_training=False)
+
+#     # select the last token from the seq_len dimension
+#     predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
+
+#     print("predictions: ", predictions)
+#     print("prediction probabilities: ", tf.nn.softmax(predictions))
+#     print("max probability: ", tf.reduce_max(tf.nn.softmax(predictions)))
+
+#     predicted_id = tf.argmax(predictions, axis=-1)
+
+#     # concatentate the predicted_id to the output which is given to the decoder
+#     # as its input.
+#     print("predicted id: ", predicted_id)
+#     seq_len += 1
+#     # encoder_input = tf.stack([tf.cast(encoder_input, tf.int32), tf.cast(predicted_id, tf.int32)])
+#     # encoder_input = tf.reshape(tf.concat([tf.cast(encoder_input, tf.int32), tf.cast(predicted_id, tf.int32)], 1), [1, seq_len])
+#     output_array = output_array.write(i+1, predicted_id[0])
+#     print(output_array)
+
+#     # if predicted_id == 6:
+#     #     break
+
+# output = tf.transpose(output_array.stack())
+# print(output)
+# print(detokenize_sequence(output))
