@@ -625,28 +625,53 @@ def accuracy_function(real, pred):
 # ########################################################################
 # # Training and checkpointing
 # ########################################################################
-transformer = Transformer(
-    num_layers=num_layers,
-    d_model=d_model,
-    num_heads=num_heads,
-    dff=dff,
-    input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
-    target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
-    pe_input=GENOME_CUTOFF_SIZE,
-    pe_target=GENOME_CUTOFF_SIZE,
-    rate=dropout_rate)
+def build_transformer():
+    transformer = Transformer(
+        num_layers=num_layers,
+        d_model=d_model,
+        num_heads=num_heads,
+        dff=dff,
+        input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+        target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+        pe_input=GENOME_CUTOFF_SIZE,
+        pe_target=GENOME_CUTOFF_SIZE,
+        rate=dropout_rate)
 
-checkpoint_path = "./checkpoints/full"
+    checkpoint_path = "./checkpoints/full"
 
-ckpt = tf.train.Checkpoint(transformer=transformer,
-                           optimizer=optimizer)
+    ckpt = tf.train.Checkpoint(transformer=transformer)
 
-ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
+    ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
 
-# if a checkpoint exists, restore the latest checkpoint.
-if ckpt_manager.latest_checkpoint:
-    ckpt.restore(ckpt_manager.latest_checkpoint)
-    print('Latest checkpoint restored!!')
+    if ckpt_manager.latest_checkpoint:
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print('Latest checkpoint restored!!')
+    
+    return transformer
+
+
+# transformer = Transformer(
+#     num_layers=num_layers,
+#     d_model=d_model,
+#     num_heads=num_heads,
+#     dff=dff,
+#     input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+#     target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+#     pe_input=GENOME_CUTOFF_SIZE,
+#     pe_target=GENOME_CUTOFF_SIZE,
+#     rate=dropout_rate)
+
+# checkpoint_path = "./checkpoints/full"
+
+# ckpt = tf.train.Checkpoint(transformer=transformer,
+#                            optimizer=optimizer)
+
+# ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
+
+# # if a checkpoint exists, restore the latest checkpoint.
+# if ckpt_manager.latest_checkpoint:
+#     ckpt.restore(ckpt_manager.latest_checkpoint)
+#     print('Latest checkpoint restored!!')
 
 
 # # The @tf.function trace-compiles train_step into a TF graph for faster
