@@ -1,16 +1,10 @@
 
 import logging
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-
 import tensorflow as tf
 
-from pyfaidx import Fasta
-
-from transformer_kmer import Transformer, CustomSchedule, ksize, start_token, end_token
-from utils import build_kmers, build_kmer_token_list
+from transformer_kmer import ksize, start_token, end_token
+from utils import build_kmer_token_list
 
 logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
@@ -39,8 +33,8 @@ class KmerPredictor():
         kmer_tokens = build_kmer_token_list("data/dataset_1000.fasta", ksize)
         kmer_tokens = sorted(kmer_tokens)
         kmer_tokens.insert(0, start_token)
-        # kmer_tokens.append(end_token)
-        self.kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 2 for kmer in kmer_tokens }
+        kmer_tokens.append(end_token)
+        self.kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 1 for kmer in kmer_tokens }
         # self.kmer_token_dict[start_token] = 1    # Set index of 1 for start token
         # sorted_kmer_list = sorted(list(kmer_token_dict.items()), key=lambda x: (x[1], x[0]))
         # print(sorted_kmer_list)

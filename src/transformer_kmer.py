@@ -31,6 +31,8 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 
 # Sequence Settings
 GENOME_CUTOFF_SIZE = 16700 # 16700
+BUFFER_SIZE = 20000
+BATCH_SIZE = 16
 ksize = 5
 start_token = "<S>"
 end_token = "<E>"
@@ -46,7 +48,7 @@ kmer_tokens = build_kmer_token_list("data/dataset_1000.fasta", ksize)
 kmer_tokens = sorted(kmer_tokens)
 kmer_tokens.insert(0, start_token)
 kmer_tokens.append(end_token)
-print(kmer_tokens)
+# print(kmer_tokens)
 kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 1 for kmer in kmer_tokens }
 # kmer_token_dict[start_token] = 1    # Set index of 1 for start token
 # kmer_token_dict[end_token] = 
@@ -125,18 +127,12 @@ def dataset_from_fasta(fasta_filepath, train=0.7, val=0.2, test=0.1):
         print(len(t_kmers))
         i_ragged = tf.constant(i_kmers) # .to_tensor(default_value='', shape=[None, 17000])
         t_ragged = tf.ragged.constant(t_kmers).to_tensor() # .to_tensor(default_value='', shape=[None, 17000])
-        # i_ragged = tf.ragged.map_flat_values(tokenize_kmer, i_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
-        # t_ragged = tf.ragged.map_flat_values(tokenize_kmer, t_ragged).to_tensor(default_value=tokenize_kmer(""), shape=[None, 17000])
-        # print(i_ragged)
-        # print(t_ragged)
         return tf.data.Dataset.from_tensor_slices((i_ragged, t_ragged))
     
     trainset = create_dataset_subset(train_labels)
     valset = create_dataset_subset(val_labels)
     testset = create_dataset_subset(test_labels)
     return trainset, valset, testset
-
-    # return tf.data.Dataset.from_tensor_slices((i_kmers, t_kmers))
 
 
 def make_batches(ds):
@@ -148,10 +144,6 @@ def make_batches(ds):
         .prefetch(tf.data.AUTOTUNE)
         .map(tokenize_pairs, num_parallel_calls=tf.data.AUTOTUNE))
         
-
-
-BUFFER_SIZE = 20000
-BATCH_SIZE = 16
 
 def create_data_batches():
     logging.info("Beginning data batch creation")
@@ -180,18 +172,7 @@ def load_data_batches():
     return train_batches, val_batches, test_batches
 
 
-# print("Creating dataset from 1000 FASTA file")
-# trainset, valset, testset = dataset_from_fasta("data/dataset_1000.fasta")
-# print("\nDone creating dataset from 1000 FASTA file")
-# train_batches = make_batches(trainset)
-# for inp, tar in train_batches.take(1):
-#     tf.print(inp, summarize=10)
-#     tf.print(tar, summarize=10)
-
-
 # create_data_batches()
-
-
 train_batches, val_batches, test_batches = load_data_batches()
 for inp, tar in train_batches.take(1):
     tf.print(inp, summarize=10)
@@ -638,6 +619,7 @@ def build_transformer():
         rate=dropout_rate)
 
     checkpoint_path = "./checkpoints/full"
+    # checkpoint_path = "./checkpoints/len_16700/train"
 
     ckpt = tf.train.Checkpoint(transformer=transformer)
 
@@ -650,28 +632,28 @@ def build_transformer():
     return transformer
 
 
-# transformer = Transformer(
-#     num_layers=num_layers,
-#     d_model=d_model,
-#     num_heads=num_heads,
-#     dff=dff,
-#     input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
-#     target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
-#     pe_input=GENOME_CUTOFF_SIZE,
-#     pe_target=GENOME_CUTOFF_SIZE,
-#     rate=dropout_rate)
+transformer = Transformer(
+    num_layers=num_layers,
+    d_model=d_model,
+    num_heads=num_heads,
+    dff=dff,
+    input_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+    target_vocab_size=len(list(kmer_token_dict.keys())) + 1,
+    pe_input=GENOME_CUTOFF_SIZE,
+    pe_target=GENOME_CUTOFF_SIZE,
+    rate=dropout_rate)
 
-# checkpoint_path = "./checkpoints/full"
+checkpoint_path = "./checkpoints/full"
 
-# ckpt = tf.train.Checkpoint(transformer=transformer,
-#                            optimizer=optimizer)
+ckpt = tf.train.Checkpoint(transformer=transformer,
+                           optimizer=optimizer)
 
-# ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
+ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
 
-# # if a checkpoint exists, restore the latest checkpoint.
-# if ckpt_manager.latest_checkpoint:
-#     ckpt.restore(ckpt_manager.latest_checkpoint)
-#     print('Latest checkpoint restored!!')
+# if a checkpoint exists, restore the latest checkpoint.
+if ckpt_manager.latest_checkpoint:
+    ckpt.restore(ckpt_manager.latest_checkpoint)
+    print('Latest checkpoint restored!!')
 
 
 # # The @tf.function trace-compiles train_step into a TF graph for faster
@@ -715,7 +697,7 @@ def train_step(inp, tar):
 # train_loss = tf.keras.metrics.Mean(name='train_loss')
 # train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
 
-# tf.print("HERE")
+tf.print("HERE")
 # EPOCHS = 5
 # for epoch in range(EPOCHS):
 #     start = time.time()
@@ -723,7 +705,6 @@ def train_step(inp, tar):
 #     train_loss.reset_states()
 #     train_accuracy.reset_states()
 
-#     # inp -> portuguese, tar -> english
 #     for (batch, (inp, tar)) in enumerate(train_batches):
 #         train_step(inp, tar)
 

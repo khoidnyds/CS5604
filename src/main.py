@@ -1,4 +1,5 @@
 import argparse
+from logging import debug
 from dna2vec import DNA2Vec
 # from transformer import Transformer
 from validation import Validation
@@ -9,6 +10,7 @@ from myLog import Log
 from transformer_kmer import build_transformer, ksize
 from utils import build_kmers
 from kmerPredictor import KmerPredictor
+from transformerEval import evaluate_test_loss_and_accuracy
 
 def kmer_probs_to_base_probs(kmer_probs):
     """
@@ -89,8 +91,8 @@ class DNACompressor():
             # Transform data and send through arithmetic encoding
             next_kmer = kmers[kidx]
             next_base = next_kmer[ksize - 1]
-            base_probs = kmer_probs_to_base_probs(kmer_probs)
-            iterate_arithmetic_encoder(base_probs, next_base)
+            # base_probs = kmer_probs_to_base_probs(kmer_probs)
+            # iterate_arithmetic_encoder(base_probs, next_base)
             # Feed next actual kmer into to the predictor model
             print("Known output: ", self.predictor.output)
             print("Known output: ", self.predictor.detokenize_sequence(self.predictor.output))
@@ -152,7 +154,12 @@ def main(args):
         f'Compressing "{args.input}" directory, Path of log file: "{logging_path}",  Output directory "{args.output}"')
         
     compressor = DNACompressor("", "")
-    compressor.compress_sequence("ACGTTTGCA")
+    compressor.compress_sequence("GATCACAGGTCTA")
+
+    # Use this to run the transformer evaluation:
+    # WARNING, it takes a while and requires largemem_q partition
+    # evaluate_test_loss_and_accuracy()
+
 
     ###################################################################
     # out_path = Path(args.output)
