@@ -10,7 +10,8 @@ from myLog import Log
 from transformer_kmer import build_transformer, ksize
 from utils import build_kmers
 from kmerPredictor import KmerPredictor
-from transformerEval import evaluate_test_loss_and_accuracy
+from transformerEval import get_validation_metrics
+import transformerEval as te
 
 def kmer_probs_to_base_probs(kmer_probs):
     """
@@ -99,6 +100,9 @@ class DNACompressor():
             print("Top 5 Kmers: ", self.predictor.debug_get_n_highest_prob_kmers(kmer_probs, 5))
             print("Predicted: ", self.predictor.debug_get_highest_prob_kmer(kmer_probs))
             print("Actual: ", next_kmer)
+
+            te.measure_precision(next_kmer, kmer_probs)
+
             self.predictor.feedback_next_kmer(next_kmer)
 
     def decompress_sequence(self, seq_num, seq_len, initial_k1chunk):
@@ -153,13 +157,14 @@ def main(args):
     logging.info(
         f'Compressing "{args.input}" directory, Path of log file: "{logging_path}",  Output directory "{args.output}"')
         
-    compressor = DNACompressor("", "")
-    compressor.compress_sequence("GATCACAGGTCTA")
+    # compressor = DNACompressor("", "")
+    # compressor.compress_sequence("GATCACAGGTCTAAAAAAAA")
 
     # Use this to run the transformer evaluation:
     # WARNING, it takes a while and requires largemem_q partition
-    # evaluate_test_loss_and_accuracy()
+    # evaluate_test_set()
 
+    get_validation_metrics()
 
     ###################################################################
     # out_path = Path(args.output)

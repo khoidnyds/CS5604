@@ -30,6 +30,7 @@ logging.getLogger('tensorflow').setLevel(logging.ERROR)  # suppress warnings
 # ########################################################################
 
 # Sequence Settings
+checkpoint_path = "./checkpoints/full"
 GENOME_CUTOFF_SIZE = 16700 # 16700
 BUFFER_SIZE = 20000
 BATCH_SIZE = 16
@@ -174,12 +175,12 @@ def load_data_batches():
 
 # create_data_batches()
 train_batches, val_batches, test_batches = load_data_batches()
-for inp, tar in train_batches.take(1):
-    tf.print(inp, summarize=10)
-    tf.print(tar, summarize=10)
-    print(detokenize_sequence(tar[0]))
-    print(detokenize_sequence(tf.cast(tf.constant(2564), dtype=tf.int64)))
-    print(tokenize_sequence(tf.constant(end_token)))
+# for inp, tar in train_batches.take(1):
+#     tf.print(inp, summarize=10)
+#     tf.print(tar, summarize=10)
+#     print(detokenize_sequence(tar[0]))
+#     print(detokenize_sequence(tf.cast(tf.constant(2564), dtype=tf.int64)))
+#     print(tokenize_sequence(tf.constant(end_token)))
 
 
 # ########################################################################
@@ -618,7 +619,7 @@ def build_transformer():
         pe_target=GENOME_CUTOFF_SIZE,
         rate=dropout_rate)
 
-    checkpoint_path = "./checkpoints/full"
+    # checkpoint_path = "./checkpoints/full"
     # checkpoint_path = "./checkpoints/len_16700/train"
 
     ckpt = tf.train.Checkpoint(transformer=transformer)
@@ -642,8 +643,6 @@ transformer = Transformer(
     pe_input=GENOME_CUTOFF_SIZE,
     pe_target=GENOME_CUTOFF_SIZE,
     rate=dropout_rate)
-
-checkpoint_path = "./checkpoints/full"
 
 ckpt = tf.train.Checkpoint(transformer=transformer,
                            optimizer=optimizer)
