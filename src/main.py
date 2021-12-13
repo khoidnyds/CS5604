@@ -152,6 +152,18 @@ def arg_parse():
                         type=str,
                         default="log",
                         help='log directory (default: %(default)s)')
+    parser.add_argument('-e', '--run-example',
+                        action='store_true',
+                        help='Predicts kmers for the example sequence "GATCACAGGTCTAAAAAAAA"')
+    parser.add_argument('-t', '--test',
+                        action='store_true',
+                        help='Runs the prediction model on the test set and provides metrics')
+    parser.add_argument('-v', '--validation',
+                        action='store_true',
+                        help='Runs the prediction model on the validation set over epochs 1 through 27')
+    parser.add_argument('-c', '--continue-training',
+                        action='store_true',
+                        help='Continues the transformer training process from the most recent saved epoch checkpoint')
     args = parser.parse_args()
     return args
 
@@ -166,25 +178,31 @@ def main(args):
 
     logging.info(
         f'Compressing "{args.input}" directory, Path of log file: "{logging_path}",  Output directory "{args.output}"')
-        
 
     # # Use the following to continue training on the transformer
     # # WARNING, this takes ~3hr/epoch and requires running on the largemem_q node
-    # continue_training(num_epochs=4)
+    if (args.continue_training):
+        print("Continue Training")
+        continue_training(num_epochs=5)
     
     # # Use this to run assessment of the test set:
     # # WARNING, it takes a while and requires largemem_q node
-    # evaluate_test_set()
+    if (args.test):
+        print("Run Test Set")
+        evaluate_test_set()
 
     # # Use this to run assessment of the validation set for a range of training epochs:
     # # WARNING, it takes a while and requires largemem_q node
-    # get_validation_metrics(24, 27)
+    if (args.validation):
+        print("Run Validation")
+        get_validation_metrics(1, 27)
 
 
     # Use the following to print out a brief test of sequence predictions vs actual kmers
-    test_sequence = "GATCACAGGTCTAAAAAAAA"
-    compressor = DNACompressor("", "")
-    compressor.compress_sequence(test_sequence)
+    if (args.run_example):
+        test_sequence = "GATCACAGGTCTAAAAAAAA"
+        compressor = DNACompressor("", "")
+        compressor.compress_sequence(test_sequence)
 
 
 if __name__ == "__main__":
