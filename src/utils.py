@@ -20,6 +20,26 @@ def build_kmers(sequence, ksize):
     return kmers
 
 
+
+def read_fasta_to_dict(fasta_file):
+    gene_dict = {}
+    with open(fasta_file, "r") as f:
+        all_fastas = f.read().split("\n\n")
+        for fasta in all_fastas:
+            lines = fasta.split("\n")
+            gene_dict[lines[0]] = ''.join(lines[1:])
+    return gene_dict
+
+def build_kmer_token_list(fasta_file, ksize):
+    kmer_list = []
+    gene_dict = read_fasta_to_dict(fasta_file)
+    for label in gene_dict.keys():
+        seq_kmers = build_kmers(gene_dict[label], ksize)
+        kmer_list.extend(seq_kmers)
+    kmer_list = list(set(kmer_list))
+    
+    return kmer_list
+
 def pretty_time_delta(seconds):
     sign_string = '-' if seconds < 0 else ''
     seconds = abs(int(seconds))
@@ -34,3 +54,4 @@ def pretty_time_delta(seconds):
         return '%s%dm%ds' % (sign_string, minutes, seconds)
     else:
         return '%s%ds' % (sign_string, seconds)
+
