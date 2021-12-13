@@ -96,7 +96,6 @@ class ArithmeticCoding():
         decoded = []
         low = 0
         high = 1
-        bytes = bytes[:-1]
         while True:
             val = self.bin2float(bytes)
             idx = np.argmax(new_cdf > val)-1
