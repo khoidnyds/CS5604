@@ -7,10 +7,10 @@ from arithmeticCode import ArithmeticCoding
 from pathlib import Path
 from myLog import Log
 # import transformer_kmer as trfrm
-from transformer_kmer import build_transformer, ksize
+from transformer_kmer import build_transformer, ksize, continue_training
 from utils import build_kmers
 from kmerPredictor import KmerPredictor
-from transformerEval import get_validation_metrics
+from transformerEval import get_validation_metrics, evaluate_test_set
 import transformerEval as te
 
 def kmer_probs_to_base_probs(kmer_probs):
@@ -92,16 +92,15 @@ class DNACompressor():
             # Transform data and send through arithmetic encoding
             next_kmer = kmers[kidx]
             next_base = next_kmer[ksize - 1]
+            # # The following two lines would deal with the arithmetic coder
             # base_probs = kmer_probs_to_base_probs(kmer_probs)
             # iterate_arithmetic_encoder(base_probs, next_base)
             # Feed next actual kmer into to the predictor model
-            print("Known output: ", self.predictor.output)
+            # print("Known output: ", self.predictor.output)
             print("Known output: ", self.predictor.detokenize_sequence(self.predictor.output))
             print("Top 5 Kmers: ", self.predictor.debug_get_n_highest_prob_kmers(kmer_probs, 5))
             print("Predicted: ", self.predictor.debug_get_highest_prob_kmer(kmer_probs))
             print("Actual: ", next_kmer)
-
-            te.measure_precision(next_kmer, kmer_probs)
 
             self.predictor.feedback_next_kmer(next_kmer)
 
@@ -113,7 +112,7 @@ class DNACompressor():
         self.predictor.start_kmer_prediction()  # initialize prediction loop
         for kidx in range(seq_len):
             kmer_probs = self.predictor.get_next_kmer_probabilities()
-            # Transform probabilities and send through decoder
+            # # Transform probabilities and send through decoder
             base_probs = kmer_probs_to_base_probs(kmer_probs)
             next_base = iterate_arithmetic_decoder(base_probs, seq_num)
             next_kmer += next_base  # Append new base to kmer
@@ -157,30 +156,24 @@ def main(args):
     logging.info(
         f'Compressing "{args.input}" directory, Path of log file: "{logging_path}",  Output directory "{args.output}"')
         
-    # compressor = DNACompressor("", "")
-    # compressor.compress_sequence("GATCACAGGTCTAAAAAAAA")
 
-    # Use this to run the transformer evaluation:
-    # WARNING, it takes a while and requires largemem_q partition
+    # # Use the following to continue training on the transformer
+    # # WARNING, this takes ~3hr/epoch and requires running on the largemem_q node
+    # continue_training(num_epochs=4)
+    
+    # # Use this to run assessment of the test set:
+    # # WARNING, it takes a while and requires largemem_q node
     # evaluate_test_set()
 
-    get_validation_metrics()
-
-    ###################################################################
-    # out_path = Path(args.output)
-    # Path.mkdir(out_path, parents=True, exist_ok=True)
-
-    # fasta_extension = [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"]
-    # files = [x for x in Path(args.input).iterdir()
-    #          if x.is_file() and x.suffix in fasta_extension]
-    # for file in files:
-    #     logging.info(f"Compressing file {file}")
-    #     DNACompressor(file, out_path)
-    
+    # # Use this to run assessment of the validation set for a range of training epochs:
+    # # WARNING, it takes a while and requires largemem_q node
+    # get_validation_metrics(24, 27)
 
 
-
-    
+    # Use the following to print out a brief test of sequence predictions vs actual kmers
+    test_sequence = "GATCACAGGTCTAAAAAAAA"
+    compressor = DNACompressor("", "")
+    compressor.compress_sequence(test_sequence)
 
 
 if __name__ == "__main__":

@@ -49,12 +49,7 @@ kmer_tokens = build_kmer_token_list("data/dataset_1000.fasta", ksize)
 kmer_tokens = sorted(kmer_tokens)
 kmer_tokens.insert(0, start_token)
 kmer_tokens.append(end_token)
-# print(kmer_tokens)
 kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 1 for kmer in kmer_tokens }
-# kmer_token_dict[start_token] = 1    # Set index of 1 for start token
-# kmer_token_dict[end_token] = 
-# sorted_kmer_list = sorted(list(kmer_token_dict.items()), key=lambda x: (x[1], x[0]))
-# print(sorted_kmer_list)
 kmer_lookup = tf.lookup.StaticVocabularyTable(
     tf.lookup.KeyValueTensorInitializer(
         list(kmer_token_dict.keys()),
@@ -78,19 +73,21 @@ reverse_kmer_lookup = tf.lookup.StaticHashTable(
 # # Text tokenization & detokenization
 # ########################################################################
 
-# Take in a genome file (A,C,G,T)s
-# Create numerical representation of each 11 length k-mer in the sequence
+# Take in a tensor of kmer strings
+# Create numerical representation of each k-mer of length ksize in the sequence
 def tokenize_sequence(seq_tensor):
     return kmer_lookup.lookup(seq_tensor)
 
+# Take tensor of kmer tokens
+# Return tensor of kmer strings
 def detokenize_sequence(tok_seq_tensor):
     return reverse_kmer_lookup.lookup(tok_seq_tensor)
 
+# Turn pairs of kmer strings into tokens
 def tokenize_pairs(inputseq, targetseq):
     i_tokens = tokenize_sequence(inputseq)
     t_tokens = tokenize_sequence(targetseq)
     return i_tokens, t_tokens
-
 
 # Input data should be a kmer, target is the subsequent kmer
 def dataset_from_fasta(fasta_filepath, train=0.7, val=0.2, test=0.1):
@@ -99,7 +96,7 @@ def dataset_from_fasta(fasta_filepath, train=0.7, val=0.2, test=0.1):
 
     Each gene sequence is split into a series of kmers
     Every kmer up to (# kmers - 1) is used as input data
-    Every kmer past the 1st is used as the target kmer for the previous kmer in the seqence
+    Every kmer past the is used as the target kmer for the previous kmer in the seqence
     """
     assert math.isclose(train+val+test, 1)
     # Each fasta file should become its own "sentence"
@@ -110,9 +107,6 @@ def dataset_from_fasta(fasta_filepath, train=0.7, val=0.2, test=0.1):
     train_labels = list(gene_seqs.keys())[:nt]
     val_labels = list(gene_seqs.keys())[nt:nv]
     test_labels = list(gene_seqs.keys())[nv:]
-    # print(train_labels, "\n\n\n")
-    # print(val_labels, "\n\n\n")
-    # print(test_labels, "\n\n\n")
 
     def create_dataset_subset(seq_labels):
         i_kmers = []
@@ -173,14 +167,11 @@ def load_data_batches():
     return train_batches, val_batches, test_batches
 
 
+# Create the data batches and save them to disk
 # create_data_batches()
+
+# Load the data batches from disk
 train_batches, val_batches, test_batches = load_data_batches()
-# for inp, tar in train_batches.take(1):
-#     tf.print(inp, summarize=10)
-#     tf.print(tar, summarize=10)
-#     print(detokenize_sequence(tar[0]))
-#     print(detokenize_sequence(tf.cast(tf.constant(2564), dtype=tf.int64)))
-#     print(tokenize_sequence(tf.constant(end_token)))
 
 
 # ########################################################################
@@ -619,9 +610,6 @@ def build_transformer():
         pe_target=GENOME_CUTOFF_SIZE,
         rate=dropout_rate)
 
-    # checkpoint_path = "./checkpoints/full"
-    # checkpoint_path = "./checkpoints/len_16700/train"
-
     ckpt = tf.train.Checkpoint(transformer=transformer)
 
     ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
@@ -652,7 +640,7 @@ ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
 # if a checkpoint exists, restore the latest checkpoint.
 if ckpt_manager.latest_checkpoint:
     ckpt.restore(ckpt_manager.latest_checkpoint)
-    print('Latest checkpoint restored!!')
+    tf.print('Latest checkpoint restored!!')
 
 
 # # The @tf.function trace-compiles train_step into a TF graph for faster
@@ -687,78 +675,27 @@ def train_step(inp, tar):
     train_accuracy(accuracy_function(tar_real, predictions))
 
 
-# BUFFER_SIZE = 20000
-# BATCH_SIZE = 64
+def continue_training(num_epochs):
+    tf.print("Continuing Training")
+    EPOCHS = num_epochs
+    for epoch in range(EPOCHS):
+        start = time.time()
 
-# train_examples, val_examples = examples['train'], examples['validation']
-# train_batches = make_batches(train_examples)
-# val_batches = make_batches(val_examples)
-# train_loss = tf.keras.metrics.Mean(name='train_loss')
-# train_accuracy = tf.keras.metrics.Mean(name='train_accuracy')
+        train_loss.reset_states()
+        train_accuracy.reset_states()
 
-tf.print("HERE")
-# EPOCHS = 5
-# for epoch in range(EPOCHS):
-#     start = time.time()
+        for (batch, (inp, tar)) in enumerate(train_batches):
+            train_step(inp, tar)
 
-#     train_loss.reset_states()
-#     train_accuracy.reset_states()
+            if batch % 50 == 0:
+                tf.print(
+                    f'Epoch {epoch + 1} Batch {batch} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
 
-#     for (batch, (inp, tar)) in enumerate(train_batches):
-#         train_step(inp, tar)
+        if (epoch + 1) % 1 == 0:
+            ckpt_save_path = ckpt_manager.save()
+            tf.print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
 
-#         if batch % 50 == 0:
-#             tf.print(
-#                 f'Epoch {epoch + 1} Batch {batch} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
+        tf.print(
+            f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
 
-#     if (epoch + 1) % 1 == 0:
-#         ckpt_save_path = ckpt_manager.save()
-#         tf.print(f'Saving checkpoint for epoch {epoch+1} at {ckpt_save_path}')
-
-#     tf.print(
-#         f'Epoch {epoch + 1} Loss {train_loss.result():.4f} Accuracy {train_accuracy.result():.4f}')
-
-#     tf.print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs\n')
-
-
-
-
-# output_array = tf.TensorArray(dtype=tf.int64, size=0, dynamic_size=True)
-# output_array = output_array.write(0, tokenize_sequence(tf.constant([start_token])))
-# encoder_input = tokenize_sequence(tf.constant([start_token]))[tf.newaxis]
-# seq_len = tf.size(encoder_input)
-# for i in tf.range(10):
-#     # print(seq_len)
-#     # print(GENOME_CUTOFF_LEN - seq_len.numpy())
-#     output = tf.transpose(output_array.stack())
-#     # paddings = tf.constant([[0,0], [0, GENOME_CUTOFF_SIZE - tf.size(encoder_input).numpy()]])
-#     # padded_input = tf.pad(encoder_input, paddings, mode='CONSTANT')
-#     print("encoder input: ", encoder_input)
-#     # print("padded input: ", padded_input)
-#     # predictions, _ = transformer([encoder_input, output], is_training=False)
-#     predictions, _ = transformer([encoder_input, output], is_training=False)
-
-#     # select the last token from the seq_len dimension
-#     predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
-
-#     print("predictions: ", predictions)
-#     print("prediction probabilities: ", tf.nn.softmax(predictions))
-#     print("max probability: ", tf.reduce_max(tf.nn.softmax(predictions)))
-
-#     predicted_id = tf.argmax(predictions, axis=-1)
-
-#     # concatentate the predicted_id to the output which is given to the decoder
-#     # as its input.
-#     print("predicted id: ", predicted_id)
-#     seq_len += 1
-#     # encoder_input = tf.stack([tf.cast(encoder_input, tf.int32), tf.cast(predicted_id, tf.int32)])
-#     # encoder_input = tf.reshape(tf.concat([tf.cast(encoder_input, tf.int32), tf.cast(predicted_id, tf.int32)], 1), [1, seq_len])
-#     output_array = output_array.write(i+1, predicted_id[0])
-#     print(output_array)
-
-#     # if predicted_id == 6:
-#     #     break
-
-# output = tf.transpose(output_array.stack())
-# print(output)
-# print(detokenize_sequence(output))
+        tf.print(f'Time taken for 1 epoch: {time.time() - start:.2f} secs\n')

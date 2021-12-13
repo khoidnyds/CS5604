@@ -35,9 +35,6 @@ class KmerPredictor():
         kmer_tokens.insert(0, start_token)
         kmer_tokens.append(end_token)
         self.kmer_token_dict = { kmer : kmer_tokens.index(kmer) + 1 for kmer in kmer_tokens }
-        # self.kmer_token_dict[start_token] = 1    # Set index of 1 for start token
-        # sorted_kmer_list = sorted(list(kmer_token_dict.items()), key=lambda x: (x[1], x[0]))
-        # print(sorted_kmer_list)
         self.kmer_lookup = tf.lookup.StaticVocabularyTable(
             tf.lookup.KeyValueTensorInitializer(
                 list(self.kmer_token_dict.keys()),
@@ -109,57 +106,8 @@ class KmerPredictor():
         # Update the transformer output with actual next kmer
         if self.is_output_updated:
             print("Warning, updating kmer outputs before predicting next kmer")
-        # kmer_tensor = tf.squeeze(self.kmer_lookup.lookup(next_kmer), axis=[0])
         kmer_tensor = self.kmer_lookup.lookup(tf.constant(next_kmer))[tf.newaxis]
         self.output_array = self.output_array.write(self.current_kmer_num, kmer_tensor)
         self.current_kmer_num += 1
         self.is_output_updated = True
 
-
-
-# learning_rate = CustomSchedule(100)
-
-# optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
-#                                      epsilon=1e-9)
-
-# transformer = Transformer(
-#     num_layers=4,
-#     d_model=100,
-#     num_heads=4,
-#     dff=256,
-#     input_vocab_size=2564-1 + 1,
-#     target_vocab_size=2564-1 + 1,
-#     pe_input=16700,
-#     pe_target=16700,
-#     rate=0.1)
-
-# checkpoint_path = "./checkpoints/len_16700/train"
-
-# ckpt = tf.train.Checkpoint(transformer=transformer,
-#                            optimizer=optimizer)
-
-# ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=50)
-
-# # if a checkpoint exists, restore the latest checkpoint.
-# if ckpt_manager.latest_checkpoint:
-#     ckpt.restore(ckpt_manager.latest_checkpoint)
-#     print('Latest checkpoint restored!!')
-
-
-# # transformer = tf.saved_model.load("models/transformer/test")
-# predictor = KmerPredictor(transformer)
-# # Basic compression loop could look like:
-# kmers = build_kmers("GATCACTATAC", ksize)
-# predictor.start_kmer_prediction()
-# for kidx in range(len(kmers)):
-#     # Get kmer predictions
-#     probabilities = predictor.get_next_kmer_probabilities()
-#     iterate_arithmetic_encoder(probabilities)
-#     predicted_kmer_token = tf.argmax(probabilities, axis=-1)
-#     predicted_kmer = predictor.detokenize_sequence(predicted_kmer_token)[0][0].numpy().decode('UTF-8')
-#     print("Highest prob: ", tf.math.reduce_max(probabilities))
-#     print("Predicted next kmer: ", predicted_kmer)
-#     # Feed true next 
-#     predictor.feedback_next_kmer(kmers[kidx])
-# print(predictor.output)
-# print(predictor.detokenize_sequence(predictor.output))
