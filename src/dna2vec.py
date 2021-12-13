@@ -46,11 +46,13 @@ class DNA2Vec():
         Path.mkdir(self.out_path, parents=True, exist_ok=True)
 
         self.data = Fasta(str(input_path))
-        self.kmer = 11
+        self.kmer = 13
         self.window_size = 8
-        self.num_ns = 4
-        self.embedding_dim = 512
-        self.num_epochs = 20
+        self.num_ns = 9
+        self.embedding_dim = 300
+        self.num_epochs = 2
+        self.val_split = 0.2
+
         logging.info(
             f"Initializing embedding space with word2vec model, kmer:{self.kmer}, window size:{self.window_size}, negative sample:{self.num_ns}, embedding dimension:{self.embedding_dim}")
 
@@ -74,10 +76,13 @@ class DNA2Vec():
 
         early_stop = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss', patience=5)
+        tensorboard_callback = tf.keras.callbacks.TensorBoard(
+            log_dir=self.out_path.joinpath("tensorboard"), histogram_freq=1)
+
         word2vec.fit(self.train_data,
                      epochs=self.num_epochs,
                      verbose=True,
-                     callbacks=[early_stop],
+                     callbacks=[tensorboard_callback, early_stop],
                      validation_data=self.val_data)
         weights = word2vec.get_layer('w2v_embedding').get_weights()[0]
 
@@ -123,7 +128,7 @@ class DNA2Vec():
         logging.info("Building dataset")
 
         self.sequences = [[self.vocab[word] for word in self.corpus.iloc[sent, :]]
-                          for sent in range(self.corpus.shape[0])][:100]
+                          for sent in range(self.corpus.shape[0])][:500]
 
         targets, contexts, labels = self.generate_training_data()
 
@@ -135,8 +140,7 @@ class DNA2Vec():
             ((targets, contexts), labels))
         dataset = dataset.shuffle(BUFFER_SIZE)
 
-        val_split = 0.2
-        val_size = int(val_split*labels.shape[0])
+        val_size = int(self.val_split*labels.shape[0])
         train_size = labels.shape[0]-val_size
         val_data = dataset.take(val_size)
         train_data = dataset.skip(train_size)

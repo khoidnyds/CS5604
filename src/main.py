@@ -12,6 +12,9 @@ from utils import build_kmers
 from kmerPredictor import KmerPredictor
 from transformerEval import get_validation_metrics, evaluate_test_set
 import transformerEval as te
+import time
+from utils import pretty_time_delta
+import logging
 
 def kmer_probs_to_base_probs(kmer_probs):
     """
@@ -58,12 +61,20 @@ class DNACompressor():
         self.model_path = Path("models")
         Path.mkdir(self.model_path, parents=True, exist_ok=True)
 
+
         self.transformer_path = "./checkpoints/len_16700/train"
         self.transformer = build_transformer()
         self.predictor = KmerPredictor(self.transformer)
 
+        start = time.time()
+
+        ##############################
         self.pipeline()
         # self.validation()
+        ##############################
+
+        duration = pretty_time_delta(time.time()-start)
+        logging.info(f"Total running time {duration}")
 
     def pipeline(self):
         """
